@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inicio de Sesión Inconveniente</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            text-align: center;
+            margin: 50px;
+        }
+
+        .container {
+            max-width: 500px;
+            margin: auto;
+            padding: 20px;
+            border: 2px solid #333;
+            border-radius: 10px;
+        }
+
+        .volume-control {
+            margin-top: 20px;
+        }
+
+        .volume-step {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            margin: 5px;
+        }
+
+        .volume-step input {
+            width: 60px;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class=" container">
+    <h2>Iniciar Sesión</h2>
+    <button id="playAudio">Reproducir Audio</button>
+    <input type="text" id="wordInput" placeholder="Escribe la palabra">
+    <button id="submitWord">Enviar</button>
+
+    <h3>Control de Velocidad</h3>
+    <input type="text" id="eDigits" placeholder="20 dígitos de e">
+    <button id="applySpeed">Normalizar Audio</button>
+    <p>Velocidad actual: <span id="speedValue">x5</span></p>
+
+    <div class="volume-control">
+        <h3>Control de Volumen</h3>
+        <p>Ingresa los 4 primeros digitos de pi en orden</p>
+        <div id="volumeBar"></div>
+    </div>
+    </div>
+
+    <audio id="audio">
+        <source src="Chorizo.mp3" type="audio/mp3">
+    </audio>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const playAudioBtn = document.getElementById('playAudio');
+            const wordInput = document.getElementById('wordInput');
+            const submitWordBtn = document.getElementById('submitWord');
+            const eDigitsInput = document.getElementById('eDigits');
+            const applySpeedBtn = document.getElementById('applySpeed');
+            const speedValueSpan = document.getElementById('speedValue');
+            const volumeBar = document.getElementById('volumeBar');
+            const audio = document.getElementById('audio');
+
+            // Configurar Web Audio API
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const source = audioContext.createMediaElementSource(audio);
+            const distortion = audioContext.createWaveShaper();
+            const gainNode = audioContext.createGain();
+
+            function makeDistortionCurve(amount) {
+                const k = amount;
+                const samples = 44100;
+                const curve = new Float32Array(samples);
+                for (let i = 0; i < samples; i++) {
+                    const x = (i * 2) / samples - 1;
+                    curve[i] = (Math.PI + k) * x / (Math.PI + k * Math.abs(x));
+                }
+                return curve;
+            }
+
+            distortion.curve = makeDistortionCurve(400);
+            source.connect(distortion);
+            distortion.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+
+            let currentPiIndex = 0; // Para controlar el orden de los dígitos de Pi
+            let currentVolumeStep = 10; // Comienza en 10%
+
+            audio.playbackRate = 5; // Velocidad inicial x5
+            gainNode.gain.value = 0; // Volumen inicial en 0
+
+            playAudioBtn.addEventListener('click', function () {
+                audio.play().catch(error => console.log('Error al reproducir audio:', error));
+            });
+
+            submitWordBtn.addEventListener('click', function () {
+                const word = wordInput.value.trim();
+                if (!word) {
+                    alert('Por favor, ingresa una palabra.');
+                    return;
+                }
+
+                if (word.toLowerCase() === 'chorizo') { // Palabra correcta
+                    alert('¡Palabra correcta!');
+                    window.location.href = 'error.html';
+                } else {
+                    alert('Palabra incorrecta. Intenta de nuevo.');
+                }
+            });
+
+            applySpeedBtn.addEventListener('click', function () {
+                const eDigits = eDigitsInput.value.trim();
+                if (eDigits.length >= 20) {
+                    audio.playbackRate = 1;
+                    speedValueSpan.textContent = 'x1';
+                    alert('Velocidad normalizada.');
+                } else {
+                    alert('Debes ingresar al menos 20 dígitos de e.');
+                }
+                eDigitsInput.value = '';
+            });
+
+            // Digitos de Pi para cada nivel de volumen (en orden)
+            const piDigitsMap = {
+                '10': '3141', '20': '5926', '30': '5358', '40': '9793',
+                '50': '2384', '60': '6264', '70': '8281', '80': '2845',
+                '90': '2719', '100': '3284'
+            };
+
+            function createVolumeSteps() {
+                for (let i = 10; i <= 100; i += 10) {
+                    const div = document.createElement('div');
+                    div.classList.add('volume-step');
+                    div.innerHTML = `
+                    <span>${i}%</span>
+                    <input type="text" id="pi${i}" placeholder="Dígitos">
+                    <button class="apply-pi" data-volume="${i / 100}">Aplicar</button>
+                `;
+                    volumeBar.appendChild(div);
+                }
+
+                document.querySelectorAll('.apply-pi').forEach(button => {
+                    button.addEventListener('click', function () {
+                        const volume = button.getAttribute('data-volume');
+                        const piInputId = `pi${Math.round(volume * 100)}`;
+                        const piDigits = document.getElementById(piInputId).value;
+
+                        // Verificar si los dígitos son correctos y están en orden
+                        if (piDigits === piDigitsMap[Math.round(volume * 100)] && Math.round(volume * 100) === currentVolumeStep) {
+                            const volumePercent = Math.round(volume * 100);
+                            let scaledVolume;
+                            
+                            if (volumePercent === 0) {
+                                scaledVolume = 0;
+                            } else if (volumePercent === 100) {
+                                scaledVolume = 1;
+                            } else {
+                                scaledVolume = 0.0001 * Math.pow(1.8, volumePercent/10); // Incremento exponencial suave
+                            }
+                            
+                            gainNode.gain.value = scaledVolume;
+                            
+                            // Distorsión que disminuye gradualmente
+                            const distortionAmount = volumePercent === 100 ? 0 : 2000 * (1 - (volumePercent/100));
+                            distortion.curve = makeDistortionCurve(distortionAmount);
+                            
+                            if (Math.round(volume * 100) === 100) {
+                                distortion.disconnect();
+                                source.disconnect();
+                                source.connect(gainNode);
+                            }
+                            alert(`Volumen ajustado a ${volume * 100}%`);
+                            currentVolumeStep += 10;
+                        } else {
+                            alert('Dígitos incorrectos o fuera de orden.');
+                        }
+                        document.getElementById(piInputId).value = '';
+                    });
+                });
+            }
+
+            createVolumeSteps();
+        });
+    </script>
+
+    </body>
+
+</html> 
